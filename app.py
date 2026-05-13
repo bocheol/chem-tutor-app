@@ -431,12 +431,12 @@ if "browser_device_id" not in st.session_state:
     
     with st.spinner("사용자 기기 정보를 동기화하는 중입니다... 잠시만 기다려주세요."):
         # localStorage에서 가져오거나 없으면 빈 문자열 반환하도록 JS 보강
-        js_code = \"\"\"
+        js_code = """
         (function() {
             var dev = localStorage.getItem('device_id');
             return dev ? dev : 'NONE';
         })()
-        \"\"\"
+        """
         dev_id = st_javascript(js_code)
         
         if dev_id == 0:
