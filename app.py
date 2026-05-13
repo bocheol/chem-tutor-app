@@ -152,21 +152,21 @@ def handle_login_sidebar():
             if st.button("로그인", type="primary", key="sidebar_login_btn",
                          use_container_width=True):
                 if name_input in USER_DB and USER_DB[name_input] == pw_input:
-                    # 기기 제한 로직 검증
-                    dev_id = st.session_state.get('browser_device_id')
-                    if not dev_id:
-                        st.error("기기 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.")
-                        return
-
-                    db_dev_id = get_student_device(name_input)
-                    if not db_dev_id:
-                        # 최초 로그인 시 현재 기기 등록
-                        register_student_device(name_input, dev_id)
-                    elif db_dev_id != dev_id:
-                        # 다른 기기에서 접속 시도 차단
-                        log_blocked_attempt(name_input, dev_id)
-                        st.error("⚠️ 다른 기기에서 이미 접속된 계정입니다. 접속이 차단되었습니다.")
-                        return
+                    # 기기 제한 로직 검증 (구글 클라우드 런 오류로 임시 비활성화)
+                    # dev_id = st.session_state.get('browser_device_id')
+                    # if not dev_id:
+                    #     st.error("기기 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.")
+                    #     return
+                    # 
+                    # db_dev_id = get_student_device(name_input)
+                    # if not db_dev_id:
+                    #     # 최초 로그인 시 현재 기기 등록
+                    #     register_student_device(name_input, dev_id)
+                    # elif db_dev_id != dev_id:
+                    #     # 다른 기기에서 접속 시도 차단
+                    #     log_blocked_attempt(name_input, dev_id)
+                    #     st.error("⚠️ 다른 기기에서 이미 접속된 계정입니다. 접속이 차단되었습니다.")
+                    #     return
 
                     st.session_state.pw_authenticated = True
                     st.session_state.student_id = name_input
@@ -424,36 +424,9 @@ def teacher_dashboard():
 
 
 
-# 메인 실행 로직 전 기기 ID(deviceId) 할당 검증
+# 메인 실행 로직 전 기기 ID(deviceId) 할당 검증 (구글 클라우드 런 이슈로 임시 비활성화)
 if "browser_device_id" not in st.session_state:
-    st.title("🧪 화학 AI 튜터")
-    st.markdown("---")
-    
-    with st.spinner("사용자 기기 정보를 동기화하는 중입니다... 잠시만 기다려주세요."):
-        # localStorage에서 가져오거나 없으면 빈 문자열 반환하도록 JS 보강
-        js_code = """
-        (function() {
-            var dev = localStorage.getItem('device_id');
-            return dev ? dev : 'NONE';
-        })()
-        """
-        dev_id = st_javascript(js_code)
-        
-        if dev_id == 0:
-            # JS 로딩 중일 때 멈춤 보류
-            st.stop()
-        
-        elif dev_id == 'NONE':
-            # 저장된 기기 정보가 없을 경우 새로 발급
-            new_uuid = str(uuid.uuid4())
-            st_javascript(f"localStorage.setItem('device_id', '{new_uuid}');")
-            st.session_state.browser_device_id = new_uuid
-            st.rerun()
-            
-        else:
-            # 기존 기기 정보 확인됨
-            st.session_state.browser_device_id = dev_id
-            st.rerun()
+    st.session_state.browser_device_id = "disabled_for_cloud_run"
 
 query_params = st.query_params
 if "key" in query_params and query_params["key"] == "20237678":
