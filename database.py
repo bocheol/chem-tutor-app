@@ -18,17 +18,28 @@ def get_kst_now():
     return datetime.now(KST).replace(tzinfo=None)
 
 @st.cache_resource
+@st.cache_resource
 def get_supabase_config():
-    """Supabase 접속 정보 반환"""
-    try:
-        url = st.secrets["supabase"]["url"]
-        key = st.secrets["supabase"]["key"]
-    except KeyError:
-        url = os.environ.get("SUPABASE_URL", "")
-        key = os.environ.get("SUPABASE_KEY", "")
-        
+    """Supabase 접속 정보 반환 (환경 변수 우선 방식)"""
+    import os
+    
+    # 1. 먼저 구글 클라우드 환경 변수(os.environ)에서 가져오기
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY")
+    
+    # 2. 환경 변수가 없다면 st.secrets (로컬 개발용) 확인
     if not url or not key:
-        st.error("Supabase URL 혹은 Key를 불러오지 못했습니다. .streamlit/secrets.toml 을 확인하세요.")
+        try:
+            # .get() 메서드를 사용하여 키가 없어도 에러가 발생하지 않도록 함
+            if "supabase" in st.secrets:
+                url = url or st.secrets["supabase"].get("url")
+                key = key or st.secrets["supabase"].get("key")
+        except Exception:
+            pass
+            
+    if not url or not key:
+        # 더 이상 st.secrets 파일 경로 에러가 아닌, 값이 없다는 구체적 에러 메시지 출력
+        raise Exception("환경 변수(SUPABASE_URL, SUPABASE_KEY)가 설정되지 않았습니다.")
         
     base_url = url.rstrip('/') + "/rest/v1"
     headers = {
