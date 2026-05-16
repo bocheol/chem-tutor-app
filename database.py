@@ -223,6 +223,22 @@ def get_content_element_detailed_analysis():
     # 시도 횟수가 많은 순으로 정렬하여 반환
     return sorted(analysis_results, key=lambda x: x['total_attempts'], reverse=True)
 
+def get_content_element_distribution():
+    """성취기준별 질문 분포"""
+    base_url, headers = get_supabase_config()
+    resp = requests.get(f"{base_url}/conversations?select=content_element", headers=headers)
+    if resp.status_code == 200:
+        data = resp.json()
+        if not data:
+            return []
+        df = pd.DataFrame(data)
+        if 'content_element' not in df or df.empty:
+            return []
+        df = df[df['content_element'] != 'N/A']
+        counts = df['content_element'].value_counts()
+        return [(index, count) for index, count in counts.items()]
+    return []
+
 def get_student_question_counts():
     """학생별 질문 횟수"""
     base_url, headers = get_supabase_config()
