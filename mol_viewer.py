@@ -5,6 +5,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem.Draw import rdMolDraw2D
 from PIL import Image, ImageDraw
+import math
 
 # [추가] 분자 마스터 DB 임포트
 from chem_db import CHEM_DB
