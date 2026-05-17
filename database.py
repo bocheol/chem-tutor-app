@@ -87,7 +87,7 @@ def parse_hidden_result_tag(answer_text):
     return None
 
 def save_conversation_to_db(student_id: str, device_id: str, question: str, answer: str, 
-                            content_element: str = None):
+                            raw_answer: str = None, content_element: str = None):
     """대화 데이터를 데이터베이스에 저장 (AI 히든 태그 자동 분석 기능 포함)"""
     base_url, headers = get_supabase_config()
     
@@ -104,7 +104,8 @@ def save_conversation_to_db(student_id: str, device_id: str, question: str, answ
     }
     
     # AI 응답 내 마스터 태그 검사 및 데이터 고도화 (바이브 엔지니어링의 핵심)
-    parsed_meta = parse_hidden_result_tag(answer)
+    text_to_parse = raw_answer if raw_answer else answer
+    parsed_meta = parse_hidden_result_tag(text_to_parse)
     if parsed_meta:
         data["curriculum_code"] = parsed_meta["curriculum_code"]
         data["content_element"] = parsed_meta["content_element"]

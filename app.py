@@ -101,7 +101,7 @@ def parse_tag_from_response(response: str) -> tuple:
     AI 응답에서 [TAG: ...] 부분을 추출하고, 클린 텍스트와 태그를 반환합니다.
     (스캐폴딩 레벨 정보는 제거하고 성취기준/내용요소만 반환)
     """
-    tag_pattern = r'\[TAG:\s*([^\n]+)\]\s*$'
+    tag_pattern = r'\[(?:TAG|RESULT):\s*([^\n]+)\]\s*$'
     match = re.search(tag_pattern, response, re.MULTILINE)
     
     if match:
@@ -244,6 +244,7 @@ def student_mode():
                 device_id=st.session_state.get("browser_device_id", "Unknown"),
                 question=prompt,
                 answer=clean_response,
+                raw_answer=raw_response,
                 content_element=tag_string,
             )
 
