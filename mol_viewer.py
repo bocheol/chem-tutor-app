@@ -1,54 +1,59 @@
+# mol_viewer.py
 import re
-import math
 from io import BytesIO
-
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem.Draw import rdMolDraw2D
 from PIL import Image, ImageDraw
 
+# [추가] 분자 마스터 DB 임포트
+from chem_db import CHEM_DB
 
-MOL_TAG_PATTERN = r'\[MOL:\s*(.+?)\s*,\s*ANGLE:\s*(.+?)\s*,\s*SHAPE:\s*(.+?)\s*\]'
-LEWIS_TAG_PATTERN = r'\[LEWIS:\s*(.+?)\s*\]'
-
+# 정규식 패턴을 화학식만 추출하도록 간소화
+MOL_TAG_PATTERN = r'\[MOL:\s*([A-Za-z0-9+-]+)\s*\]'
+LEWIS_TAG_PATTERN = r'\[LEWIS:\s*([A-Za-z0-9+-]+)\s*\]'
 
 def parse_mol_tags(text: str) -> list:
     matches = re.findall(MOL_TAG_PATTERN, text)
     results = []
-    for smiles, angle, shape in matches:
-        results.append({
-            'smiles': smiles.strip(),
-            'angle': angle.strip(),
-            'shape': shape.strip(),
-        })
+    for formula in matches:
+        formula = formula.strip()
+        if formula in CHEM_DB:
+            results.append({
+                'smiles': CHEM_DB[formula]['smiles'],
+                'angle': CHEM_DB[formula]['angle'],
+                'shape': CHEM_DB[formula]['shape'],
+            })
     return results
-
 
 def parse_lewis_tags(text: str) -> list:
     matches = re.findall(LEWIS_TAG_PATTERN, text)
-    return [s.strip() for s in matches]
-
+    results = []
+    for formula in matches:
+        formula = formula.strip()
+        if formula in CHEM_DB:
+            results.append(CHEM_DB[formula]['smiles'])
+    return results
 
 def remove_mol_tags(text: str) -> str:
     return re.sub(MOL_TAG_PATTERN, '', text).strip()
 
-
 def remove_lewis_tags(text: str) -> str:
     return re.sub(LEWIS_TAG_PATTERN, '', text).strip()
-
 
 def remove_all_vis_tags(text: str) -> str:
     text = remove_mol_tags(text)
     text = remove_lewis_tags(text)
     return text
 
-
 def generate_3d_molblock(smiles: str) -> str:
     try:
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
             return None
-        mol = Chem.AddHs(mol)
+        # 이온 화합물 등이 아닐 때만 수소 추가 자동화 지원
+        if "+" not in smiles and "-" not in smiles:
+            mol = Chem.AddHs(mol)
         result = AllChem.EmbedMolecule(mol, AllChem.ETKDGv3())
         if result == -1:
             AllChem.EmbedMolecule(mol, AllChem.ETKDG())
@@ -56,7 +61,6 @@ def generate_3d_molblock(smiles: str) -> str:
         return Chem.MolToMolBlock(mol)
     except Exception:
         return None
-
 
 _mol_counter = 0
 
@@ -105,13 +109,13 @@ def generate_3dmol_html(smiles: str, angle: str = "", shape: str = "", width: in
     """
     return html
 
-
 def render_molecule_png(smiles: str, width: int = 350, height: int = 250) -> bytes:
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return None
 
-    mol = Chem.AddHs(mol)
+    if "+" not in smiles and "-" not in smiles:
+        mol = Chem.AddHs(mol)
     AllChem.Compute2DCoords(mol)
 
     drawer = rdMolDraw2D.MolDraw2DCairo(width, height)
@@ -130,7 +134,6 @@ def render_molecule_png(smiles: str, width: int = 350, height: int = 250) -> byt
     drawer.FinishDrawing()
     return drawer.GetDrawingText()
 
-
 def _calc_lone_pairs(atom):
     if atom.GetAtomicNum() == 1:
         return 0
@@ -140,7 +143,6 @@ def _calc_lone_pairs(atom):
     bond_order_sum = sum(b.GetBondTypeAsDouble() for b in atom.GetBonds())
     lp_electrons = valence_e - fc - bond_order_sum
     return max(0, int(lp_electrons) // 2)
-
 
 def _find_lp_angles(neighbor_angles, lp_count):
     if len(neighbor_angles) == 0:
@@ -176,13 +178,13 @@ def _find_lp_angles(neighbor_angles, lp_count):
                 break
     return candidate
 
-
 def render_lewis_png(smiles: str, width: int = 400, height: int = 300) -> bytes:
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return None
 
-    mol = Chem.AddHs(mol)
+    if "+" not in smiles and "-" not in smiles:
+        mol = Chem.AddHs(mol)
     AllChem.Compute2DCoords(mol)
 
     drawer = rdMolDraw2D.MolDraw2DCairo(width, height)
