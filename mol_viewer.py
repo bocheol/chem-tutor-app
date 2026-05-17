@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 
 
 MOL_TAG_PATTERN = r'\[MOL:\s*(.+?)\s*,\s*ANGLE:\s*(.+?)\s*,\s*SHAPE:\s*(.+?)\s*\]'
-LEWIS_TAG_PATTERN = r'\[LEWIS:\s*(.+?)\s*\]'
+LEWIS_TAG_PATTERN = r'\[LEWIS:\s*(.*?)\s*\](?=\s*(?:\[|$))'
 
 
 def parse_mol_tags(text: str) -> list:
