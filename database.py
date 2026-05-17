@@ -54,10 +54,10 @@ class ConvWrapper:
     def __init__(self, data):
         self.__dict__.update(data)
         # 기본값 설정 (KeyError 방지)
-        self.curriculum_code = data.get("curriculum_code", "N/A")
+        self.chemical_formula = data.get("chemical_formula", "N/A")
+        self.task_type = data.get("task_type", "N/A")
         self.success = data.get("success", "N/A")
         self.total_turns = data.get("total_turns", 0)
-        self.content_element = data.get("content_element", "N/A")
         
         if 'created_at' in data:
             try:
@@ -71,7 +71,7 @@ class ConvWrapper:
 def parse_hidden_result_tag(answer_text):
     """
     AI 튜터의 응답 텍스트에서 [RESULT: ...] 숨겨진 태그를 파싱합니다.
-    형식: [RESULT: {성취기준 코드} | {내용 요소} | {SUCCESS: Y/N} | {총 대화 Turn 수}]
+    형식: [RESULT: {화학식} | {탐구 유형} | {SUCCESS: Y/N} | {총 대화 Turn 수}]
     """
     # SUCCESS: Y 또는 그냥 Y 둘 다 견고하게 매칭하는 정규표현식(Regex)
     pattern = r'\[RESULT:\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*(?:SUCCESS:\s*)?([YNyn])\s*\|\s*(\d+)\s*\]'
@@ -79,15 +79,15 @@ def parse_hidden_result_tag(answer_text):
     
     if match:
         return {
-            "curriculum_code": match.group(1).strip(),
-            "content_element": match.group(2).strip(),
+            "chemical_formula": match.group(1).strip(),
+            "task_type": match.group(2).strip(),
             "success": match.group(3).strip().upper(),  # 'Y' 또는 'N'으로 정규화
             "total_turns": int(match.group(4).strip())
         }
     return None
 
 def save_conversation_to_db(student_id: str, device_id: str, question: str, answer: str, 
-                            raw_answer: str = None, content_element: str = None):
+                            raw_answer: str = None):
     """대화 데이터를 데이터베이스에 저장 (AI 히든 태그 자동 분석 기능 포함)"""
     base_url, headers = get_supabase_config()
     
@@ -97,18 +97,18 @@ def save_conversation_to_db(student_id: str, device_id: str, question: str, answ
         "device_id": device_id,
         "question": question,
         "answer": answer,
-        "content_element": content_element,
-        "curriculum_code": "N/A",  # 기본값
-        "success": "N/A",          # 기본값
-        "total_turns": 0           # 기본값
+        "chemical_formula": "N/A",  # 기본값
+        "task_type": "N/A",         # 기본값
+        "success": "N/A",           # 기본값
+        "total_turns": 0            # 기본값
     }
     
     # AI 응답 내 마스터 태그 검사 및 데이터 고도화 (바이브 엔지니어링의 핵심)
     text_to_parse = raw_answer if raw_answer else answer
     parsed_meta = parse_hidden_result_tag(text_to_parse)
     if parsed_meta:
-        data["curriculum_code"] = parsed_meta["curriculum_code"]
-        data["content_element"] = parsed_meta["content_element"]
+        data["chemical_formula"] = parsed_meta["chemical_formula"]
+        data["task_type"] = parsed_meta["task_type"]
         data["success"] = parsed_meta["success"]
         data["total_turns"] = parsed_meta["total_turns"]
     
@@ -193,13 +193,13 @@ def get_statistics():
         'avg_turns_to_complete': avg_total_turns     # 4장 학습 효율성 지표로 활용
     }
 
-def get_content_element_detailed_analysis():
+def get_task_detailed_analysis():
     """
-    [논문 통계 방어 치트키] 분자 내용 요소별 스스로 추론 성공률 및 평균 대화 깊이 분석
+    [논문 통계 방어 치트키] 분자 및 탐구 유형별 스스로 추론 성공률 및 평균 대화 깊이 분석
     출력 형식: DataFrame 변환용 딕셔너리 리스트
     """
     base_url, headers = get_supabase_config()
-    resp = requests.get(f"{base_url}/conversations?select=content_element,success,total_turns", headers=headers)
+    resp = requests.get(f"{base_url}/conversations?select=chemical_formula,task_type,success,total_turns", headers=headers)
     
     if resp.status_code != 200:
         return []
@@ -210,22 +210,23 @@ def get_content_element_detailed_analysis():
         
     df = pd.DataFrame(data)
     # 데이터 전처리
-    df = df.dropna(subset=['content_element', 'success'])
+    df = df.dropna(subset=['chemical_formula', 'task_type', 'success'])
     df = df[df['success'].isin(['Y', 'N'])]
     
     if df.empty:
         return []
         
     analysis_results = []
-    # 각 분자/내용 요소별로 그룹화 정밀 분석
-    for element, group in df.groupby('content_element'):
+    # 각 화학식/탐구 유형별로 그룹화 정밀 분석
+    for (formula, t_type), group in df.groupby(['chemical_formula', 'task_type']):
         total_cases = len(group)
         success_cases = len(group[group['success'] == 'Y'])
         success_rate = round((success_cases / total_cases) * 100, 1)
         avg_turns = round(group['total_turns'].mean(), 1)
         
         analysis_results.append({
-            "content_element": element,      # 예: CO2의 구조 추론
+            "chemical_formula": formula,
+            "task_type": t_type,
             "total_attempts": total_cases,    # 누적 시도 횟수
             "success_rate": success_rate,    # 자력 추론 성공률 (%)
             "avg_dialogue_turns": avg_turns   # 평균 대화 깊이 (Turns)
@@ -234,19 +235,21 @@ def get_content_element_detailed_analysis():
     # 시도 횟수가 많은 순으로 정렬하여 반환
     return sorted(analysis_results, key=lambda x: x['total_attempts'], reverse=True)
 
-def get_content_element_distribution():
-    """성취기준별 질문 분포"""
+def get_task_distribution():
+    """분자 및 탐구 유형별 질문 분포"""
     base_url, headers = get_supabase_config()
-    resp = requests.get(f"{base_url}/conversations?select=content_element", headers=headers)
+    resp = requests.get(f"{base_url}/conversations?select=chemical_formula,task_type", headers=headers)
     if resp.status_code == 200:
         data = resp.json()
         if not data:
             return []
         df = pd.DataFrame(data)
-        if 'content_element' not in df or df.empty:
+        if 'chemical_formula' not in df or 'task_type' not in df or df.empty:
             return []
-        df = df[df['content_element'] != 'N/A']
-        counts = df['content_element'].value_counts()
+        df = df[(df['chemical_formula'] != 'N/A') & (df['task_type'] != 'N/A')]
+        # 파이 차트를 위한 라벨 생성
+        df['label'] = df['chemical_formula'] + " (" + df['task_type'] + ")"
+        counts = df['label'].value_counts()
         return [(index, count) for index, count in counts.items()]
     return []
 

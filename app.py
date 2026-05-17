@@ -17,7 +17,7 @@ from database import (
     get_all_conversations,
     get_conversations_by_student,
     get_statistics,
-    get_content_element_distribution,
+    get_task_distribution,
     get_student_question_counts,
     get_kst_now,
     get_student_device,
@@ -96,27 +96,18 @@ def display_assistant_message(content: str):
         display_mol_cards(mol_tags)
 
 
-def parse_tag_from_response(response: str) -> tuple:
+def parse_tag_from_response(response: str) -> str:
     """
-    AI 응답에서 [TAG: ...] 부분을 추출하고, 클린 텍스트와 태그를 반환합니다.
-    (스캐폴딩 레벨 정보는 제거하고 성취기준/내용요소만 반환)
+    AI 응답에서 [RESULT: ...] 부분을 추출하고, 클린 텍스트만 반환합니다.
     """
-    tag_pattern = r'\[(?:TAG|RESULT):\s*([^\n]+)\]\s*$'
+    tag_pattern = r'\[(?:TAG|RESULT):\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*(?:SUCCESS:\s*)?([YNyn])\s*\|\s*(\d+)\s*\]\s*$'
     match = re.search(tag_pattern, response, re.MULTILINE)
     
     if match:
-        tag_content = match.group(1).strip()
-        parts = [p.strip() for p in tag_content.split('|')]
-        # 첫 2개 요소(보통 성취기준, 내용요소)만 결합
-        if len(parts) >= 2:
-            content_element = f"{parts[0]} | {parts[1]}"
-        else:
-            content_element = tag_content
-            
         clean_response = response[:match.start()].strip()
-        return clean_response, content_element
+        return clean_response
     
-    return response.strip(), 'N/A'
+    return response.strip()
 
 
 # 페이지 설정
@@ -223,7 +214,6 @@ def student_mode():
             st.markdown(prompt)
 
         clean_response = ""
-        tag_string = "N/A"
 
         with st.chat_message("assistant"):
             with st.spinner("답변을 생성하는 중..."):
@@ -235,7 +225,7 @@ def student_mode():
                 ]
 
                 raw_response = chat_with_chemistry_tutor(prompt, chat_history_formatted)
-                clean_response, tag_string = parse_tag_from_response(raw_response)
+                clean_response = parse_tag_from_response(raw_response)
                 display_assistant_message(clean_response)
 
         try:
@@ -245,7 +235,6 @@ def student_mode():
                 question=prompt,
                 answer=clean_response,
                 raw_answer=raw_response,
-                content_element=tag_string,
             )
 
             st.session_state.messages.append(
@@ -304,15 +293,15 @@ def teacher_dashboard():
             st.error(f"차트 로드 오류: {e}")
     
     with chart_col2:
-        st.markdown("##### 🏷️ 성취기준별 질문 분포")
+        st.markdown("##### 🏷️ 탐구 과제별 질문 분포")
         try:
-            element_dist = get_content_element_distribution()
+            element_dist = get_task_distribution()
             if element_dist:
                 df_elements = pd.DataFrame(
                     [(e[0], e[1]) for e in element_dist],
-                    columns=["성취기준", "질문수"]
+                    columns=["분자 및 탐구 유형", "질문수"]
                 )
-                fig = px.pie(df_elements, names="성취기준", values="질문수", 
+                fig = px.pie(df_elements, names="분자 및 탐구 유형", values="질문수", 
                              hole=0.4)
                 fig.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20))
                 st.plotly_chart(fig, use_container_width=True)
@@ -349,8 +338,8 @@ def teacher_dashboard():
                     st.markdown(f"**[{time_str}] {conv.student_id}**")
                     st.info(f"🗣️ 질문: {conv.question}")
                     st.success(f"🤖 답변: {conv.answer}")
-                    if conv.content_element and conv.content_element != 'N/A':
-                        st.caption(f"🏷️ 성취기준: {conv.content_element}")
+                    if conv.chemical_formula and conv.chemical_formula != 'N/A':
+                        st.caption(f"🏷️ 탐구 과제: {conv.chemical_formula} ({conv.task_type})")
                     st.markdown("---")
         else:
             st.warning("조건에 맞는 대화 내용이 없습니다.")
@@ -364,7 +353,10 @@ def teacher_dashboard():
                 "타임스탬프": conv.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 "질문": conv.question,
                 "답변": conv.answer,
-                "성취기준": conv.content_element or "N/A",
+                "화학식": conv.chemical_formula or "N/A",
+                "탐구유형": conv.task_type or "N/A",
+                "성공여부": conv.success or "N/A",
+                "소요턴수": conv.total_turns or 0,
             })
         df = pd.DataFrame(df_data)
         d_col1, d_col2 = st.columns(2)
